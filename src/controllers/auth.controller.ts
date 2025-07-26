@@ -25,16 +25,10 @@ if (!JWT_SECRET) {
 }
 
 export default {
-  /**
-   * @desc Register a new user
-   * @route POST /api/auth/register
-   * @access Public
-   */
   async register(req: Request, res: Response): Promise<void> {
     try {
       const { email, password, name }: RegisterRequest = req.body || {};
 
-      // Input validation
       if (!email || !password || !name) {
         res.status(400).json({
           success: false,
@@ -43,7 +37,6 @@ export default {
         return;
       }
 
-      // Validate email format
       if (!validateEmail(email)) {
         res.status(400).json({
           success: false,
@@ -52,7 +45,6 @@ export default {
         return;
       }
 
-      // Validate password strength
       const passwordValidation = validatePassword(password);
       if (!passwordValidation.isValid) {
         res.status(400).json({
@@ -62,7 +54,6 @@ export default {
         return;
       }
 
-      // Validate name
       if (!validateName(name)) {
         res.status(400).json({
           success: false,
@@ -71,7 +62,6 @@ export default {
         return;
       }
 
-      // Check for existing user
       const existingUser = await prisma.users.findFirst({
         where: { email: email.toLowerCase() },
       });
@@ -84,13 +74,10 @@ export default {
         return;
       }
 
-      // Hash password
       const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
-      // Generate user ID
       const userId = uuidv4();
 
-      // Create new user
       const newUser = await prisma.users.create({
         data: {
           id: userId,
@@ -99,20 +86,19 @@ export default {
           raw_user_meta_data: {
             name: name.trim(),
           },
-          email_confirmed_at: new Date(), // Auto-confirm for this implementation
+          email_confirmed_at: new Date(), 
           created_at: new Date(),
           updated_at: new Date(),
         },
       });
 
-      // Generate JWT token
       const tokenPayload: JwtPayload = {
         userId: newUser.id,
         email: newUser.email!,
       };
 
       const token = jwt.sign(tokenPayload, JWT_SECRET, {
-        expiresIn: "7d", // 7 days
+        expiresIn: "7d", 
         issuer: "your-app-name",
         audience: "your-app-users",
       });
@@ -140,16 +126,11 @@ export default {
     }
   },
 
-  /**
-   * @desc Login an existing user
-   * @route POST /api/auth/login
-   * @access Public
-   */
+  
   async login(req: Request, res: Response): Promise<void> {
     try {
       const { email, password }: LoginRequest = req.body;
 
-      // Input validation
       if (!email || !password) {
         res.status(400).json({
           success: false,
@@ -158,7 +139,6 @@ export default {
         return;
       }
 
-      // Validate email format
       if (!validateEmail(email)) {
         res.status(400).json({
           success: false,
@@ -167,12 +147,10 @@ export default {
         return;
       }
 
-      // Find user by email
       const user = await prisma.users.findFirst({
         where: { email: email.toLowerCase() },
       });
 
-      // Check if user exists and has a password
       if (!user || !user.encrypted_password) {
         res.status(401).json({
           success: false,
@@ -181,7 +159,6 @@ export default {
         return;
       }
 
-      // Check if user account is not deleted
       if (user.deleted_at) {
         res.status(401).json({
           success: false,
@@ -190,7 +167,6 @@ export default {
         return;
       }
 
-      // Check if user is banned
       if (user.banned_until && user.banned_until > new Date()) {
         res.status(403).json({
           success: false,
@@ -199,7 +175,6 @@ export default {
         return;
       }
 
-      // Verify password
       const isPasswordValid = await bcrypt.compare(
         password,
         user.encrypted_password
@@ -213,7 +188,6 @@ export default {
         return;
       }
 
-      // Update last sign-in time
       await prisma.users.update({
         where: { id: user.id },
         data: {
@@ -222,14 +196,13 @@ export default {
         },
       });
 
-      // Generate JWT token
       const tokenPayload: JwtPayload = {
         userId: user.id,
         email: user.email!,
       };
 
       const token = jwt.sign(tokenPayload, JWT_SECRET, {
-        expiresIn: "7d", // 7 days
+        expiresIn: "7d", 
         issuer: "your-app-name",
         audience: "your-app-users",
       });
@@ -257,11 +230,7 @@ export default {
     }
   },
 
-  /**
-   * @desc Get current user's profile
-   * @route GET /api/auth/profile
-   * @access Private
-   */
+
   async profile(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const userId = req.userId;
@@ -296,7 +265,6 @@ export default {
         return;
       }
 
-      // Check if user account is deleted
       const fullUser = await prisma.users.findUnique({
         where: { id: userId },
         select: { deleted_at: true },
@@ -333,17 +301,9 @@ export default {
     }
   },
 
-  /**
-   * @desc Logout user (invalidate token on client side)
-   * @route POST /api/auth/logout
-   * @access Private
-   */
+
   async logout(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      // In a stateless JWT implementation, logout is typically handled client-side
-      // by removing the token from storage. However, you can add server-side logic here
-      // such as adding the token to a blacklist if needed.
-
       res.status(200).json({
         success: true,
         message: "Logout successful",
@@ -357,11 +317,7 @@ export default {
     }
   },
 
-  /**
-   * @desc Refresh JWT token
-   * @route POST /api/auth/refresh
-   * @access Private
-   */
+
   async refresh(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const userId = req.userId;
@@ -375,7 +331,6 @@ export default {
         return;
       }
 
-      // Verify user still exists and is active
       const user = await prisma.users.findUnique({
         where: { id: userId },
         select: {
@@ -398,7 +353,6 @@ export default {
         return;
       }
 
-      // Generate new token
       const tokenPayload: JwtPayload = {
         userId: user.id,
         email: user.email!,

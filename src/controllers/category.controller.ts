@@ -18,6 +18,8 @@ export default {
       });
     }
   },
+
+
   async findById(req: Request, res: Response) {
     const { id } = req.params;
     try {
@@ -39,6 +41,8 @@ export default {
       });
     }
   },
+
+  
   async create(req: Request, res: Response) {
     const { name } = req.body;
     try {
@@ -60,6 +64,8 @@ export default {
       });
     }
   },
+
+
   async update(req: Request, res: Response) {
     const { id } = req.params;
     const { name } = req.body;
@@ -82,6 +88,9 @@ export default {
       });
     }
   },
+
+
+
   async delete(req: Request, res: Response) {
     const { id } = req.params;
     try {
