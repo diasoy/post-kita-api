@@ -1,7 +1,6 @@
 import { Request, Response } from "express";
 import productService from "../services/product.service";
 import sharp from "sharp";
-import { MulterRequest } from "../types/multer.types";
 import { AuthenticatedRequest } from "../middlewares/auth.middleware";
 import { createClient } from "@supabase/supabase-js";
 
