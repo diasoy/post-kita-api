@@ -1,21 +1,26 @@
-// routes/api.ts
 import express from "express";
 import authRoutes from "./auth.routes";
 import productController from "../controllers/product.controller";
 import categoryController from "../controllers/category.controller";
+import multer from "multer";
+import { authenticateToken } from "../middlewares/auth.middleware"; 
 
 const router = express.Router();
+const upload = multer({ storage: multer.memoryStorage() });
 
 // --- Rute Autentikasi ---
 router.use("/auth", authRoutes);
 
 // --- Rute Produk ---
-// PINDAHKAN RUTE INI KE ATAS /products/:id
-// Rute yang lebih spesifik harus didefinisikan terlebih dahulu
 router.get("/products/search", productController.findByName);
-
 router.get("/products", productController.findAll);
 router.get("/products/:id", productController.findById);
+router.post(
+  "/products",
+  authenticateToken,
+  upload.single("image"),
+  productController.create
+);
 
 // Uncomment jika sudah diimplementasikan
 // router.post("/products", upload.single("image"), productController.create);

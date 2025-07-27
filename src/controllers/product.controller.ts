@@ -1,7 +1,18 @@
 import { Request, Response } from "express";
 import productService from "../services/product.service";
+import sharp from "sharp";
+import { MulterRequest } from "../types/multer.types";
+import { AuthenticatedRequest } from "../middlewares/auth.middleware";
+import { createClient } from "@supabase/supabase-js";
 
+const supabaseUrl = process.env.SUPABASE_URL!;
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
+const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
+  auth: {
+    persistSession: false,
+  },
+});
 
 export default {
   async findAll(req: Request, res: Response) {
@@ -66,69 +77,84 @@ export default {
     }
   },
 
-  // async create(req: MulterRequest, res: Response) {
-  //   try {
-  //     const { name, price, category_id, description } = req.body;
-  //     if (!name || !price) {
-  //       return res.status(400).json({ message: "Name and price are required" });
-  //     }
-  //     if (isNaN(Number(price)) || Number(price) < 0) {
-  //       return res.status(400).json({ message: "Price must be a non-negative number" });
-  //     }
+  async create(req: AuthenticatedRequest, res: Response) {
+    try {
+      const { name, price, category_id, description } = req.body;
+      const userId = req.userId;
 
-  //     const file = req.file;
-  //     if (!file) {
-  //       return res.status(400).json({ message: "Image file is required" });
-  //     }
-  //     const allowedTypes = ["image/jpeg", "image/png", "image/jpg"];
-  //     if (!allowedTypes.includes(file.mimetype)) {
-  //       return res.status(400).json({ message: "Only jpg, jpeg, png files are allowed" });
-  //     }
+      if (!userId) {
+        return res
+          .status(401)
+          .json({ message: "Unauthorized: User ID not found" });
+      }
 
-  //     let imageBuffer = file.buffer;
-  //     let imageSize = file.size;
-  //     // Kompres jika > 1MB
-  //     if (imageSize > 1024 * 1024) {
-  //       const sharp = require("sharp");
-  //       imageBuffer = await sharp(file.buffer)
-  //         .jpeg({ quality: 70 })
-  //         .toBuffer();
-  //     }
+      // Validate input (existing validation)
+      if (!name || !price) {
+        return res.status(400).json({ message: "Name and price are required" });
+      }
 
-  //     // Upload ke Supabase Storage
-  //     const { createClient } = require("@supabase/supabase-js");
-  //     const supabaseUrl = process.env.SUPABASE_URL;
-  //     const supabaseKey = process.env.SUPABASE_KEY;
-  //     const supabase = createClient(supabaseUrl, supabaseKey);
-  //     const fileName = `products/${Date.now()}_${file.originalname}`;
-  //     const { data, error: uploadError } = await supabase.storage
-  //       .from("product-images")
-  //       .upload(fileName, imageBuffer, {
-  //         contentType: file.mimetype,
-  //         upsert: true,
-  //       });
-  //     if (uploadError) {
-  //       return res.status(500).json({ message: "Failed to upload image", error: uploadError.message });
-  //     }
-  //     const { publicUrl } = supabase.storage.from("product-images").getPublicUrl(fileName).data;
+      const file = (req as any).file;
+      if (!file) {
+        return res.status(400).json({ message: "Image file is required" });
+      }
 
-  //     const product = await productService.create({
-  //       name,
-  //       price: Number(price),
-  //       category_id: category_id ? Number(category_id) : null,
-  //       description,
-  //       image_url: publicUrl,
-  //     });
-  //     res.status(201).json({
-  //       message: "Product created successfully",
-  //       data: product,
-  //     });
-  //   } catch (error) {
-  //     res.status(500).json({
-  //       message: "Internal Server Error",
-  //       error: error instanceof Error ? error.message : "An unknown error occurred",
-  //     });
-  //   }
-  // }
+      // File type validation
+      const allowedTypes = ["image/jpeg", "image/png", "image/jpg"];
+      if (!allowedTypes.includes(file.mimetype)) {
+        return res.status(400).json({
+          message: "Only jpg, jpeg, png files are allowed",
+        });
+      }
 
+      // Image processing
+      let imageBuffer = file.buffer;
+      if (file.size > 1024 * 1024) {
+        imageBuffer = await sharp(file.buffer).jpeg({ quality: 70 }).toBuffer();
+      }
+
+      // Generate unique filename with user ID
+      const fileName = `products/${userId}/${Date.now()}_${file.originalname}`;
+
+      // Supabase Storage Upload with Service Role Key
+      const { data, error: uploadError } = await supabase.storage
+        .from("products")
+        .upload(fileName, imageBuffer, {
+          contentType: file.mimetype,
+          upsert: true,
+        });
+
+      if (uploadError) {
+        console.error("Upload Error:", uploadError);
+        return res.status(500).json({
+          message: "Failed to upload image",
+          error: uploadError.message,
+        });
+      }
+
+      // Get public URL
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("products").getPublicUrl(fileName);
+
+      // Create product with image URL
+      const product = await productService.create({
+        name,
+        price: Number(price),
+        category_id: category_id ? Number(category_id) : null,
+        description,
+        image_url: publicUrl,
+      });
+
+      res.status(201).json({
+        message: "Product created successfully",
+        data: product,
+      });
+    } catch (error) {
+      console.error("Product Creation Error:", error);
+      res.status(500).json({
+        message: "Internal Server Error",
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  },
 };
